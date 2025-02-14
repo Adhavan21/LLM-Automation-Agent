@@ -13,6 +13,8 @@ def call_function(function,args) :
         format_markdown(args["file_path"],args["version"])
     elif function == "count_days" :
         count_days(args["input_file"],args["output_file"],args["day"])
+    elif function == "sort_contacts" :
+        sort_contacts(args["input_file"],args["output_file"],args["order"])
 
 def send_to_llm(task) :
 
@@ -85,6 +87,31 @@ def send_to_llm(task) :
             },
             "strict": True
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sort_contacts",
+            "description": "Receives input file path, output file path and the order of sorting as arguments and sorts the input file according to the provided order and writes the result to output file",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "input_file": {"type": "string",
+                            "description":"The path of the input file that is to be read"
+                            },
+                    "output_file": {"type": "string",
+                            "description":"The path of the output file in which the result should be written"
+                            },
+                    "order":{"type": "array",
+                            "items": {"type": "string"},
+                            "description":"List of the order parameters. Should be exactly as in the prompt and in the exact same order"
+                            }
+                },
+                "required": ["input_file","output_file","order"],
+                "additionalProperties": False
+            },
+            "strict": True
+        }
     }
     ]
 
@@ -138,6 +165,18 @@ def count_days(input_file, output_file,day):
 
     except FileNotFoundError:
         print(f"Error: {input_file} not found.")
+
+def sort_contacts(input_file,output_file,order=['last_name','first_name']) :
+    with open(input_file, "r", encoding="utf-8") as f:
+        contacts = json.load(f)
+    
+    sorted_contacts = sorted(contacts, key=lambda c: (c[order[0]], c[order[1]]))
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(sorted_contacts, f, indent=4)
+    
+    print(f"Contacts sorted by {order[0]} and {order[1]} and saved to {output_file}")
+
 
 app = FastAPI()
 
