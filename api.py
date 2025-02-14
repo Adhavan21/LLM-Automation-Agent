@@ -7,6 +7,8 @@ from openai import OpenAI
 from dateutil import parser
 from datetime import datetime
 import glob
+
+api_key="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"
 def call_function(function,args) :
     if function == "run_script" :
         run_script(args["url"],args["email"])
@@ -20,11 +22,13 @@ def call_function(function,args) :
         recent_logs(args["files_path"],args["output_file"],args["count"])
     elif function == "markdown_index" :
         markdown_index(args["files_path"],args["output_file"])
+    elif function == "email_sender_id" :
+        email_sender_id(args["input_file"],args["output_file"])
 
 def send_to_llm(task) :
 
     client = OpenAI(
-        api_key="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"
+        api_key=api_key
     )
     tools = [
     {
@@ -162,6 +166,27 @@ def send_to_llm(task) :
             },
             "strict": True
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "email_sender_id",
+            "description": "Receives input file path, output file path as arguments and then reads the input file which has the content of an email and passes the content to an llm to extract the sender email id and writes the id to output file",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "input_file": {"type": "string",
+                            "description":"The path of the input file that contains the email"
+                            },
+                    "output_file": {"type": "string",
+                            "description":"The path of the output file in which the sender email id should be written"
+                            }                
+                },
+                "required": ["input_file","output_file"],
+                "additionalProperties": False
+            },
+            "strict": True
+        }
     }
     ]
 
@@ -259,6 +284,36 @@ def markdown_index(files_path,output_file) :
         json.dump(index, f, indent=4)
 
     print(f"Index file saved to {output_file}")
+
+def email_sender_id(input_file, output_file) :#, api_key):
+    # Read email content
+    client = OpenAI(
+        api_key=api_key
+    )
+    with open(input_file, "r", encoding="utf-8") as f:
+        email_content = f.read()
+
+    # Define prompt for LLM
+    prompt = f"""
+    Extract the sender's email address from the following email content.
+    Return only the email address and nothing else.
+
+    Email content:
+    {email_content}
+    """
+    completion = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "system", "content": "You are an AI that extracts email addresses."},
+                  {"role": "user", "content": prompt}]
+    )
+
+    sender_email = completion.choices[0].message.content
+
+    # Save to output file
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(sender_email)
+
+    print(f"Sender's email saved to {output_file}")
 
 app = FastAPI()
 
