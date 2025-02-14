@@ -18,6 +18,8 @@ def call_function(function,args) :
         sort_contacts(args["input_file"],args["output_file"],args["order"])
     elif function == "recent_logs" :
         recent_logs(args["files_path"],args["output_file"],args["count"])
+    elif function == "markdown_index" :
+        markdown_index(args["files_path"],args["output_file"])
 
 def send_to_llm(task) :
 
@@ -139,6 +141,27 @@ def send_to_llm(task) :
             },
             "strict": True
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "markdown_index",
+            "description": "Receives input files location path, output file path and then reads each file and creates an index and writes it to output file",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "files_path": {"type": "string",
+                            "description":"The path of the location where the files to be read are present"
+                            },
+                    "output_file": {"type": "string",
+                            "description":"The path of the output file in which the result should be written"
+                            }                
+                },
+                "required": ["files_path","output_file"],
+                "additionalProperties": False
+            },
+            "strict": True
+        }
     }
     ]
 
@@ -217,6 +240,25 @@ def recent_logs(files_path,output_file,count) :
         f.write("\n".join(first_lines) + "\n")
     print(f"Extracted first lines saved to {output_file}")
 
+def markdown_index(files_path,output_file) :
+    index = {}
+    # Traverse the directory recursively
+    for root, _, files in os.walk(files_path):
+        for file in files:
+            if file.endswith(".md"):  # Process only Markdown files
+                file_path = os.path.join(root, file)
+
+                # Read file and extract first H1 heading
+                with open(file_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.startswith("# "):  # H1 found
+                            relative_path = os.path.relpath(file_path, files_path)  # Get relative path
+                            index[relative_path] = line[2:].strip()  # Remove "# " and extract title
+                            break  # Stop reading after first H1
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(index, f, indent=4)
+
+    print(f"Index file saved to {output_file}")
 
 app = FastAPI()
 
