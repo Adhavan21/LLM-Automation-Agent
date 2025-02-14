@@ -6,6 +6,7 @@ import json
 from openai import OpenAI
 from dateutil import parser
 from datetime import datetime
+import glob
 def call_function(function,args) :
     if function == "run_script" :
         run_script(args["url"],args["email"])
@@ -15,6 +16,8 @@ def call_function(function,args) :
         count_days(args["input_file"],args["output_file"],args["day"])
     elif function == "sort_contacts" :
         sort_contacts(args["input_file"],args["output_file"],args["order"])
+    elif function == "recent_logs" :
+        recent_logs(args["files_path"],args["output_file"],args["count"])
 
 def send_to_llm(task) :
 
@@ -112,6 +115,30 @@ def send_to_llm(task) :
             },
             "strict": True
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recent_logs",
+            "description": "Receives input files location path, output file path and number of files as arguments and reads the first line of each file and writes them to output file",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "files_path": {"type": "string",
+                            "description":"The path of the location where the files to be read are present"
+                            },
+                    "output_file": {"type": "string",
+                            "description":"The path of the output file in which the result should be written"
+                            },
+                    "count":{"type": "string",
+                            "description":"The number of files that should be processed. Should only contain the number"
+                            }
+                },
+                "required": ["files_path","output_file","count"],
+                "additionalProperties": False
+            },
+            "strict": True
+        }
     }
     ]
 
@@ -176,6 +203,19 @@ def sort_contacts(input_file,output_file,order=['last_name','first_name']) :
         json.dump(sorted_contacts, f, indent=4)
     
     print(f"Contacts sorted by {order[0]} and {order[1]} and saved to {output_file}")
+
+def recent_logs(files_path,output_file,count) :
+    log_files = sorted(glob.glob(os.path.join(files_path, "*.log")), key=os.path.getmtime, reverse=True)
+    recent_logs = log_files[:int(count)]
+    first_lines = []
+    for log_file in recent_logs:
+        with open(log_file, "r", encoding="utf-8") as f:
+            first_line = f.readline().strip()  # Read only the first line
+            if first_line:  
+                first_lines.append(first_line)
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(first_lines) + "\n")
+    print(f"Extracted first lines saved to {output_file}")
 
 
 app = FastAPI()
