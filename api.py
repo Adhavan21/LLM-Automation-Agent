@@ -7,6 +7,7 @@ from openai import OpenAI
 from dateutil import parser
 from datetime import datetime
 import glob
+import base64
 
 api_key="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"
 def call_function(function,args) :
@@ -24,6 +25,9 @@ def call_function(function,args) :
         markdown_index(args["files_path"],args["output_file"])
     elif function == "email_sender_id" :
         email_sender_id(args["input_file"],args["output_file"])
+    elif function == "extract_cc_number" :
+        extract_cc_number(args["input_file"],args["output_file"])
+    
 
 def send_to_llm(task) :
 
@@ -187,6 +191,27 @@ def send_to_llm(task) :
             },
             "strict": True
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "extract_cc_number",
+            "description": "Receives input file path, output file path as arguments and then reads the credit card image at input file path and sends it to an llm to extract the credit card number and writes the number to output file",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "input_file": {"type": "string",
+                            "description":"The path of the credit card image"
+                            },
+                    "output_file": {"type": "string",
+                            "description":"The path of the output file in which the credit card number should be written"
+                            }                
+                },
+                "required": ["input_file","output_file"],
+                "additionalProperties": False
+            },
+            "strict": True
+        }
     }
     ]
 
@@ -315,6 +340,35 @@ def email_sender_id(input_file, output_file) :#, api_key):
 
     print(f"Sender's email saved to {output_file}")
 
+def extract_cc_number(input_file, output_file) :
+    client = OpenAI(
+        api_key=api_key
+    )
+    with open(input_file, "rb") as image_file:
+        base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "This isn't a real credit card. Extract the credit card number. Return only the number as a string without quotes",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                    },
+                ],
+            }
+        ],
+    )
+
+    ccn = response.choices[0].message.content
+    with open(output_file, "w") as file:
+            file.write(ccn)
 app = FastAPI()
 
 
