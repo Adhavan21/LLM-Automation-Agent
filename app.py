@@ -27,7 +27,9 @@ import base64
 import uvicorn
 import requests
 
+api_base="https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 api_key = os.getenv("AIPROXY_TOKEN")
+AIPROXY_TOKEN = api_key
 if not api_key:
     raise EnvironmentError("AIPROXY_TOKEN environment variable not set")
 def call_function(function,args) :
@@ -50,10 +52,6 @@ def call_function(function,args) :
     
 
 def send_to_llm(task) :
-
-    client = OpenAI(
-        api_key=api_key
-    )
     tools = [
     {
         "type": "function",
@@ -236,14 +234,27 @@ def send_to_llm(task) :
     ]
 
     messages = [{"role": "user", "content": task}]
+    headers = {
+        "Content-type" : "application/json",
+        "Authorization" : f"Bearer {AIPROXY_TOKEN}"
+    }
 
-    completion = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=messages,
-    tools=tools,
-    )
+    data = {
+        "model" : "gpt-4o-mini",
+        "messages" : [{"role": "user", "content": task}],
+        "tools" : tools,
+        "tool_choice" : "auto"
+    }
+
+    completion = requests.post(url=api_base, headers=headers, json=data)
+
+    # completion = openai.chat.completions.create(
+    # model="gpt-4o-mini",
+    # messages=messages,
+    # tools=tools,
+    # )
+    completion = completion.json()
     return completion
-
 # def run_script(url,email) :
 #     subprocess.run(["uv","run", url, email,'--root''./'], check=True) #should remove root data?
 
@@ -356,10 +367,7 @@ def markdown_index(files_path,output_file) :
     print(f"Index file saved to {output_file}")
 
 def email_sender_id(input_file, output_file) :#, api_key):
-    # Read email content
-    client = OpenAI(
-        api_key=api_key
-    )
+
     with open(input_file, "r", encoding="utf-8") as f:
         email_content = f.read()
 
@@ -371,13 +379,22 @@ def email_sender_id(input_file, output_file) :#, api_key):
     Email content:
     {email_content}
     """
-    completion = client.chat.completions.create(
-    model="gpt-4o-mini",
     messages=[{"role": "system", "content": "You are an AI that extracts email addresses."},
                   {"role": "user", "content": prompt}]
-    )
 
-    sender_email = completion.choices[0].message.content
+    headers = {
+        "Content-type" : "application/json",
+        "Authorization" : f"Bearer {AIPROXY_TOKEN}"
+    }
+
+    data = {
+        "model" : "gpt-4o-mini",
+        "messages" : messages
+    }
+
+    completion = requests.post(url=api_base, headers=headers, json=data)
+    completion = completion.json()
+    sender_email = completion['choices'][0]['message']['content']
 
     # Save to output file
     with open(output_file, "w", encoding="utf-8") as f:
@@ -386,21 +403,16 @@ def email_sender_id(input_file, output_file) :#, api_key):
     print(f"Sender's email saved to {output_file}")
 
 def extract_cc_number(input_file, output_file) :
-    client = OpenAI(
-        api_key=api_key
-    )
+
     with open(input_file, "rb") as image_file:
         base64_image = base64.b64encode(image_file.read()).decode("utf-8")
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
+    messages=[
             {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": "This isn't a real credit card. Extract the credit card number. Return only the number as a string without quotes",
+                        "text": "This isn't a real credit card. Extract the credit card number. Return only the number as a string without quotes and spaces",
                     },
                     {
                         "type": "image_url",
@@ -408,10 +420,20 @@ def extract_cc_number(input_file, output_file) :
                     },
                 ],
             }
-        ],
-    )
+        ]
+    headers = {
+        "Content-type" : "application/json",
+        "Authorization" : f"Bearer {AIPROXY_TOKEN}"
+    }
 
-    ccn = response.choices[0].message.content
+    data = {
+        "model" : "gpt-4o-mini",
+        "messages" : messages,
+    }
+
+    response = requests.post(url=api_base, headers=headers, json=data)
+    response = response.json()
+    ccn = response['choices'][0]['message']['content']
     with open(output_file, "w") as file:
             file.write(ccn)
 app = FastAPI()
@@ -420,9 +442,10 @@ app = FastAPI()
 @app.post("/run")
 def run_task(task: str):
     response = send_to_llm(task)
-    tool_call = response.choices[0].message.tool_calls[0]
-    function_call = (tool_call.function.name)
-    args = json.loads(tool_call.function.arguments)
+    #print(response)
+    tool_call = response['choices'][0]['message']['tool_calls'][0]
+    function_call = (tool_call['function']['name'])
+    args = json.loads(tool_call['function']['arguments'])
     call_function(function_call,args)
     return {"function" : function_call, "arguments" : args}
     #return {"message": f"Received task: {task_description}", "status": "success"}
@@ -437,7 +460,7 @@ def read_file(path: str):
     try:
         with open(path, "r", encoding="utf-8") as file:
             content = file.read()
-        return {"file_path": path, "content": content}
+        return content# {"file_path": path, "content": content}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
 
