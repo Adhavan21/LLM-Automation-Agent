@@ -1,0 +1,6 @@
+fastapi
+pydantic
+openai
+python-dateutil
+glob2
+uvicorn
